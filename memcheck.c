@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <pthread.h>
+#include <execinfo.h>
 #include "hashmap.c/hashmap.h"
 
 extern void* __real_malloc(size_t size);
@@ -20,6 +21,8 @@ extern int __real_scandir(
     typeof(int(const struct dirent**, const struct dirent**))* compar);
 
 typedef struct te_memcheck_mem_info {
+    char* caller1;
+    char* caller2;
     size_t size;
     uintptr_t user_ptr_value;
 } te_memcheck_mem_info;
@@ -77,6 +80,12 @@ memcheck_deinit(void) {
         while (hashmap_iter(memhashmap, &iter, &item)) {
             const te_memcheck_mem_info* info = item;
             printf("%zu. leaked a pointer of size %zu bytes\n", num, info->size);
+            if (info->caller1 != NULL) {
+                printf("%s\n", info->caller1);
+            }
+            if (info->caller2 != NULL) {
+                printf("%s\n", info->caller2);
+            }
             num += 1;
         }
 
@@ -98,6 +107,29 @@ memcheck_register_ptr_locked(void* ptr, size_t size) {
     te_memcheck_mem_info info;
     info.user_ptr_value = (uintptr_t)ptr;
     info.size = size;
+    info.caller1 = NULL;
+    info.caller2 = NULL;
+
+    void* entries[8];
+    int count = backtrace(entries, 8);
+    if (count >= 4) {
+        char** symbols = backtrace_symbols(entries, count);
+
+        char* src1 = symbols[2];
+        char* src2 = symbols[3];
+
+        size_t len = strlen(src1);
+        info.caller1 = __real_malloc(sizeof(char) * (len + 1));
+        memcpy(info.caller1, src1, len);
+        info.caller1[len] = 0;
+
+        len = strlen(src2);
+        info.caller2 = __real_malloc(sizeof(char) * (len + 1));
+        memcpy(info.caller2, src2, len);
+        info.caller2[len] = 0;
+
+        __real_free(symbols);
+    }
 
     is_disabled = true; // because hashmap can resize here
     if (hashmap_set(memhashmap, &info) != NULL) {
@@ -112,13 +144,19 @@ memcheck_unregister_ptr_locked(void* ptr) {
     te_memcheck_mem_info test_info;
     test_info.user_ptr_value = (uintptr_t)ptr;
 
-    is_disabled = true; // because hashmap can resize here
-    if (hashmap_delete(memhashmap, &test_info) == NULL) {
+    const te_memcheck_mem_info* info = hashmap_get(memhashmap, &test_info);
+    if (info == NULL) {
         printf(
             "unknown pointer specified in free, either it was allocated using a "
             "special function (which is not \"wrapped\") or it's a double-free happening\n");
         abort();
     }
+
+    __real_free(info->caller1);
+    __real_free(info->caller2);
+
+    is_disabled = true; // because hashmap can resize here
+    hashmap_delete(memhashmap, &test_info);
     is_disabled = false;
 }
 
