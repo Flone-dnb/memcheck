@@ -19,6 +19,7 @@ extern int __real_scandir(
     const char* restrict dirp, struct dirent*** restrict namelist,
     typeof(int(const struct dirent*))* filter,
     typeof(int(const struct dirent**, const struct dirent**))* compar);
+extern char* __real_realpath(const char* restrict name, char* restrict resolved);
 
 typedef struct te_memcheck_mem_info {
     char* caller1;
@@ -325,4 +326,19 @@ __wrap_getline(char** restrict lineptr, size_t* restrict n, FILE* restrict strea
     pthread_mutex_unlock(&mutex);
 
     return chars_read;
+}
+
+char*
+__wrap_realpath(const char* restrict name, char* restrict resolved) {
+    char* out = __real_realpath(name, resolved);
+
+    if (resolved == NULL && out != NULL) {
+        pthread_mutex_lock(&mutex);
+
+        memcheck_register_ptr_locked(out, strlen(out));
+
+        pthread_mutex_unlock(&mutex);
+    }
+
+    return out;
 }

@@ -22,3 +22,5 @@ int __wrap_scandir(
     typeof(int(const struct dirent**, const struct dirent**))* compar);
 
 ssize_t __wrap_getline(char** restrict lineptr, size_t* restrict n, FILE* restrict stream);
+
+char* __wrap_realpath(const char* restrict name, char* restrict resolved);
