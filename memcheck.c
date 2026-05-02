@@ -82,10 +82,10 @@ memcheck_deinit(void) {
             const te_memcheck_mem_info* info = item;
             printf("%zu. leaked a pointer of size %zu bytes\n", num, info->size);
             if (info->caller1 != NULL) {
-                printf("%s\n", info->caller1);
+                printf("%s <- here\n", info->caller1);
             }
             if (info->caller2 != NULL) {
-                printf("%s\n", info->caller2);
+                printf("%s <- symbol from above was called from here\n", info->caller2);
             }
             num += 1;
         }
@@ -113,11 +113,11 @@ memcheck_register_ptr_locked(void* ptr, size_t size) {
 
     void* entries[8];
     int count = backtrace(entries, 8);
-    if (count >= 4) {
+    if (count >= 5) {
         char** symbols = backtrace_symbols(entries, count);
 
-        char* src1 = symbols[2];
-        char* src2 = symbols[3];
+        char* src1 = symbols[3];
+        char* src2 = symbols[4];
 
         size_t len = strlen(src1);
         info.caller1 = __real_malloc(sizeof(char) * (len + 1));
