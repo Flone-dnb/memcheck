@@ -1,5 +1,12 @@
 #pragma once
 
+#if defined(WIN32)
+
+void memcheck_init(void);
+void memcheck_deinit(void);
+
+#else
+
 #include <stddef.h>
 #include <wchar.h>
 #include <dirent.h>
@@ -24,3 +31,5 @@ int __wrap_scandir(
 ssize_t __wrap_getline(char** restrict lineptr, size_t* restrict n, FILE* restrict stream);
 
 char* __wrap_realpath(const char* restrict name, char* restrict resolved);
+
+#endif

@@ -1,5 +1,30 @@
 #include "memcheck.h"
 
+#if defined(WIN32)
+
+#include <stdio.h>
+#include <Windows.h>
+#include <crtdbg.h>
+
+int __cdecl crt_report_hook(int reportType, char* message, int* returnValue) {
+    printf("%s", message);
+    OutputDebugStringA(message);
+    return TRUE;
+}
+
+void
+memcheck_init(void) {
+    _CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, crt_report_hook);
+    _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG);
+}
+
+void
+memcheck_deinit(void) {
+    _CrtDumpMemoryLeaks();
+}
+
+#else
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -342,3 +367,5 @@ __wrap_realpath(const char* restrict name, char* restrict resolved) {
 
     return out;
 }
+
+#endif
