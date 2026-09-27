@@ -5,7 +5,10 @@ A small and silly memory leak checker for Linux. Usage:
 - Include in your root CMakeLists.txt as the first subproject:
 
 ```
+# only for Linux:
 add_link_options(...) # <- copy-paste from CMakeLists.txt next to this readme file
+
+# for both Windows and Linux:
 add_subdirectory(<path>/memcheck)
 link_libraries(memcheck)
 ```
