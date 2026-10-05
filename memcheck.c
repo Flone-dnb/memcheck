@@ -25,12 +25,13 @@ memcheck_deinit(void) {
 
 #else
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include <pthread.h>
 #include <execinfo.h>
-#include "hashmap.c/hashmap.h"
+#include <num_hashtable.h>
 
 extern void* __real_malloc(size_t size);
 extern void* __real_calloc(size_t nmemb, size_t size);
@@ -54,7 +55,7 @@ typedef struct te_memcheck_mem_info {
 } te_memcheck_mem_info;
 
 static pthread_mutex_t mutex;
-static struct hashmap* memhashmap = NULL;
+static struct te_num_hashtable* memhashmap = NULL;
 static bool is_disabled = true;
 
 static uint64_t
@@ -76,6 +77,14 @@ memcheck_mem_info_compare(const void* a, const void* b, void* udata) {
     return !(info1->user_ptr_value == info2->user_ptr_value);
 }
 
+static void
+deinit_mem_info(void* ptr) {
+    te_memcheck_mem_info* info = ptr;
+    __real_free(info->caller1);
+    __real_free(info->caller2);
+    free(info);
+}
+
 void
 memcheck_init(void) {
     is_disabled = true;
@@ -85,9 +94,7 @@ memcheck_init(void) {
         abort();
     }
 
-    memhashmap = hashmap_new(
-        sizeof(te_memcheck_mem_info), 256, 0, 0, memcheck_mem_info_hash,
-        memcheck_mem_info_compare, NULL, NULL);
+    memhashmap = num_hashtable_create(200000, sizeof(te_memcheck_mem_info), deinit_mem_info);
 
     is_disabled = false;
 }
@@ -96,14 +103,15 @@ void
 memcheck_deinit(void) {
     is_disabled = true;
 
-    const bool found_leaks = hashmap_count(memhashmap) > 0;
+    const bool found_leaks = num_hashtable_get_item_count(memhashmap) > 0;
     if (found_leaks) {
         printf("\nMEMORY LEAKS DETECTED !!!\n\n");
 
-        size_t iter = 0;
+        te_num_hashtable_iterator* it = num_hashtable_iterator_create(memhashmap);
+
         size_t num = 1;
-        void* item;
-        while (hashmap_iter(memhashmap, &iter, &item)) {
+        void* item = num_hashtable_iterator_next(it);
+        while (item != NULL) {
             const te_memcheck_mem_info* info = item;
             printf("%zu. leaked a pointer of size %zu bytes\n", num, info->size);
             if (info->caller1 != NULL) {
@@ -113,14 +121,18 @@ memcheck_deinit(void) {
                 printf("%s <- symbol from above was called from here\n", info->caller2);
             }
             num += 1;
+
+            item = num_hashtable_iterator_next(it);
         }
+
+        num_hashtable_iterator_destroy(it);
 
         printf("\nMEMORY LEAKS DETECTED !!!\n");
     } else {
         printf("no memory leaks detected\n");
     }
 
-    hashmap_free(memhashmap);
+    num_hashtable_destroy(memhashmap);
     memhashmap = NULL;
 
     pthread_mutex_destroy(&mutex);
@@ -158,7 +170,7 @@ memcheck_register_ptr_locked(void* ptr, size_t size) {
     }
 
     is_disabled = true; // because hashmap can resize here
-    if (hashmap_set(memhashmap, &info) != NULL) {
+    if (num_hashtable_insert(memhashmap, info.user_ptr_value, &info) == 0) {
         printf("bug: already have this pointer\n");
         abort();
     }
@@ -170,7 +182,7 @@ memcheck_unregister_ptr_locked(void* ptr) {
     te_memcheck_mem_info test_info;
     test_info.user_ptr_value = (uintptr_t)ptr;
 
-    const te_memcheck_mem_info* info = hashmap_get(memhashmap, &test_info);
+    const te_memcheck_mem_info* info = num_hashtable_find(memhashmap, (uintptr_t)ptr);
     if (info == NULL) {
         printf(
             "unknown pointer specified in free, either it was allocated using a "
@@ -178,11 +190,8 @@ memcheck_unregister_ptr_locked(void* ptr) {
         abort();
     }
 
-    __real_free(info->caller1);
-    __real_free(info->caller2);
-
     is_disabled = true; // because hashmap can resize here
-    hashmap_delete(memhashmap, &test_info);
+    num_hashtable_erase(memhashmap, (uintptr_t)ptr);
     is_disabled = false;
 }
 
@@ -243,7 +252,8 @@ __wrap_realloc(void* ptr, size_t size) {
         te_memcheck_mem_info test_info;
         test_info.user_ptr_value = (uintptr_t)ptr;
 
-        const te_memcheck_mem_info* found_info = hashmap_get(memhashmap, &test_info);
+        const te_memcheck_mem_info* found_info =
+            num_hashtable_find(memhashmap, (uintptr_t)ptr);
         if (found_info == NULL) {
             printf("unknown pointer specified in realloc\n");
             abort();

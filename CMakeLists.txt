@@ -7,18 +7,14 @@ project(memcheck C)
 
 set(LIBRARY_TYPE SHARED)
 if(MSVC)
-	set(LIBRARY_TYPE STATIC)
+    set(LIBRARY_TYPE STATIC)
 endif()
 
-add_library(${PROJECT_NAME} ${LIBRARY_TYPE} memcheck.h memcheck.c)
+add_library(${PROJECT_NAME} ${LIBRARY_TYPE} memcheck.h memcheck.c num_hashtable.c num_hashtable.h)
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 if(NOT MSVC)
-	# Add pthread
-	find_package(Threads REQUIRED)
-	target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
-	
-	# Add hashmap
-	add_library(memcheck_hashmap hashmap.c/hashmap.h hashmap.c/hashmap.c)
-	target_link_libraries(${PROJECT_NAME} PRIVATE memcheck_hashmap)
+    # Add pthread
+    find_package(Threads REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 endif()

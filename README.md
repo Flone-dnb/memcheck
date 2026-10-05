@@ -1,6 +1,6 @@
 # memcheck
 
-A small and silly memory leak checker for Linux. Usage:
+A small and silly memory leak checker for Windows and Linux. Usage:
 
 - Include in your root CMakeLists.txt as the first subproject:
 
@@ -27,7 +27,7 @@ int main(void) {
 }
 ```
 
-Checks all malloc, free and similar memory operations (including linked libraries, thus requires dependencies that allocate memory to be linked dynamically). In `deinit` prints if any memory leaks occurred.
+Checks all malloc, free and similar memory operations (including linked libraries, on Linux requires dependencies that allocate memory to be linked dynamically). In `deinit` prints if any memory leaks occurred.
 
 # Prerequisites
 
