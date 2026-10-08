@@ -61,11 +61,13 @@ calc_msb_from_power_of_2_value(size_t n) {
 te_num_hashtable*
 num_hashtable_create(
     size_t max_item_count, size_t sizeof_value, void (*free_value)(void* value)) {
+    te_num_hashtable* ht;
+
     if (max_item_count < 2) {
         abort();
     }
 
-    te_num_hashtable* ht = malloc(sizeof(te_num_hashtable));
+    ht = malloc(sizeof(te_num_hashtable));
     ht->free_value = free_value == NULL ? free : free_value;
     ht->sizeof_value = sizeof_value;
     ht->total_item_count = 0;
@@ -91,6 +93,7 @@ num_hashtable_destroy(te_num_hashtable* ht) {
             ht->free_value(entry->items[j].value);
         }
         free(entry->items);
+        free(entry);
     }
     free(ht->entries);
 
@@ -104,8 +107,9 @@ get_entry_idx(te_num_hashtable* ht, size_t key) {
     size_t fractional_part = key * 2654435769U;
     return fractional_part >> (32 - ht->entry_count_msb_idx);
 #else
-    size_t fractional_part = key * 11400714819323198485ULL;
-    return fractional_part >> (64 - ht->entry_count_msb_idx);
+    unsigned long mult = 0x9E3779B9UL;
+    mult = (mult << 32) | 0x7F4A7C15UL;
+    return (key * mult) >> (64 - ht->entry_count_msb_idx);
 #endif
 }
 
@@ -149,14 +153,15 @@ num_hashtable_insert(te_num_hashtable* ht, size_t key, const void* value) {
     }
 
     if (entry->items_count == entry->items_capacity) {
+        te_num_hashtable_entry_data* new_items;
+
         if (entry->items_capacity < 4) {
             entry->items_capacity += 1;
         } else {
             entry->items_capacity = (size_t)((float)ceil((float)entry->items_capacity * 1.5f));
         }
 
-        te_num_hashtable_entry_data* new_items =
-            malloc(sizeof(te_num_hashtable_entry_data) * entry->items_capacity);
+        new_items = malloc(sizeof(te_num_hashtable_entry_data) * entry->items_capacity);
         memcpy(
             new_items, entry->items, sizeof(te_num_hashtable_entry_data) * entry->items_count);
 
@@ -219,6 +224,33 @@ num_hashtable_erase(te_num_hashtable* ht, size_t key) {
     }
 
     return 0;
+}
+
+void
+num_hashtable_clear(te_num_hashtable* ht) {
+    te_num_hashtable_entry* entry;
+    te_num_hashtable_entry_data* item;
+    size_t entry_idx;
+    size_t i;
+
+    for (entry_idx = 0; entry_idx < ht->entry_count; entry_idx++) {
+        if (ht->entries[i] == NULL) {
+            continue;
+        }
+        entry = ht->entries[i];
+
+        for (i = 0; i < entry->items_count; i++) {
+            item = &entry->items[i];
+            ht->free_value(item->value);
+        }
+        free(entry->items);
+        entry->items = NULL;
+        entry->items_capacity = 0;
+        entry->items_count = 0;
+
+        free(entry);
+        ht->entries[entry_idx] = NULL;
+    }
 }
 
 void*

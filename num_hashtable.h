@@ -20,6 +20,9 @@ unsigned char num_hashtable_insert(te_num_hashtable* ht, size_t key, const void*
 /* returns 1 if actually erased an item, 0 if was not found */
 unsigned char num_hashtable_erase(te_num_hashtable* ht, size_t key);
 
+/* removes all elements */
+void num_hashtable_clear(te_num_hashtable* ht);
+
 /* returns NULL if not found */
 void* num_hashtable_find(te_num_hashtable* ht, size_t key);
 
