@@ -171,8 +171,7 @@ memcheck_register_ptr_locked(void* ptr, size_t size) {
 
     is_disabled = true; // because hashmap can resize here
     if (num_hashtable_insert(memhashmap, info.user_ptr_value, &info) == 0) {
-        printf("bug: already have this pointer\n");
-        abort();
+        printf("memcheck ERROR: already have this pointer\n");
     }
     is_disabled = false;
 }
@@ -185,9 +184,9 @@ memcheck_unregister_ptr_locked(void* ptr) {
     const te_memcheck_mem_info* info = num_hashtable_find(memhashmap, (uintptr_t)ptr);
     if (info == NULL) {
         printf(
-            "unknown pointer specified in free, either it was allocated using a "
+            "memcheck ERROR: unknown pointer specified in free, either it was allocated using "
+            "a "
             "special function (which is not \"wrapped\") or it's a double-free happening\n");
-        abort();
     }
 
     is_disabled = true; // because hashmap can resize here
@@ -255,8 +254,7 @@ __wrap_realloc(void* ptr, size_t size) {
         const te_memcheck_mem_info* found_info =
             num_hashtable_find(memhashmap, (uintptr_t)ptr);
         if (found_info == NULL) {
-            printf("unknown pointer specified in realloc\n");
-            abort();
+            printf("memcheck ERROR: unknown pointer specified in realloc\n");
         }
 
         new_ptr = __real_realloc(ptr, size);

@@ -28,20 +28,49 @@ struct te_num_hashtable {
     size_t sizeof_value;
     size_t entry_count;
     size_t total_item_count;
+    size_t entry_count_msb_idx;
 };
+
+size_t
+round_to_power_of_2(size_t x) {
+    x--;
+
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+
+    if (sizeof(size_t) == 8) {
+        x |= x >> 32;
+    }
+
+    return x + 1;
+}
+
+size_t
+calc_msb_from_power_of_2_value(size_t n) {
+    size_t pos = 0;
+    while ((n & 1) == 0) {
+        n >>= 1;
+        pos++;
+    }
+    return pos;
+}
 
 te_num_hashtable*
 num_hashtable_create(
     size_t max_item_count, size_t sizeof_value, void (*free_value)(void* value)) {
-    if (max_item_count == 0) {
+    if (max_item_count < 2) {
         abort();
     }
 
     te_num_hashtable* ht = malloc(sizeof(te_num_hashtable));
     ht->free_value = free_value == NULL ? free : free_value;
     ht->sizeof_value = sizeof_value;
-    ht->entry_count = (size_t)((float)max_item_count * 1.25f);
     ht->total_item_count = 0;
+    ht->entry_count = round_to_power_of_2(max_item_count);
+    ht->entry_count_msb_idx = calc_msb_from_power_of_2_value(ht->entry_count);
 
     ht->entries = malloc(sizeof(te_num_hashtable_entry*) * ht->entry_count);
     memset(ht->entries, 0, sizeof(te_num_hashtable_entry*) * ht->entry_count);
@@ -68,6 +97,18 @@ num_hashtable_destroy(te_num_hashtable* ht) {
     free(ht);
 }
 
+static size_t
+get_entry_idx(te_num_hashtable* ht, size_t key) {
+    // Knuth's multiplicative hash
+#if ((size_t)-1) == 0xFFFFFFFF
+    size_t fractional_part = key * 2654435769U;
+    return fractional_part >> (32 - ht->entry_count_msb_idx);
+#else
+    size_t fractional_part = key * 11400714819323198485ULL;
+    return fractional_part >> (64 - ht->entry_count_msb_idx);
+#endif
+}
+
 static void
 init_entry(
     te_num_hashtable* ht, te_num_hashtable_entry* entry, size_t key, const void* value) {
@@ -88,7 +129,7 @@ num_hashtable_insert(te_num_hashtable* ht, size_t key, const void* value) {
     size_t entry_idx;
     size_t i;
 
-    entry_idx = key % ht->entry_count;
+    entry_idx = get_entry_idx(ht, key);
     if (ht->entries[entry_idx] == NULL) {
         ht->entries[entry_idx] = malloc(sizeof(te_num_hashtable_entry));
         entry = ht->entries[entry_idx];
@@ -142,7 +183,7 @@ num_hashtable_erase(te_num_hashtable* ht, size_t key) {
     size_t entry_idx;
     size_t i;
 
-    entry_idx = key % ht->entry_count;
+    entry_idx = get_entry_idx(ht, key);
     if (ht->entries[entry_idx] == NULL) {
         return 0;
     }
@@ -184,7 +225,7 @@ void*
 num_hashtable_find(te_num_hashtable* ht, size_t key) {
     size_t entry_idx;
 
-    entry_idx = key % ht->entry_count;
+    entry_idx = get_entry_idx(ht, key);
     if (ht->entries[entry_idx] == NULL) {
         return NULL;
     } else {
