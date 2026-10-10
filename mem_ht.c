@@ -102,11 +102,11 @@ mem_ht_destroy(mem_ht* ht) {
 static size_t
 get_entry_idx(mem_ht* ht, size_t key) {
     /* Knuth's multiplicative hash */
-#if ((size_t)-1) == 0xFFFFFFFF
+#if ULONG_MAX == 0xFFFFFFFFUL
     size_t fractional_part = key * 2654435769U;
     return fractional_part >> (32 - ht->entry_count_msb_idx);
 #else
-    unsigned long mult = 0x9E3779B9UL;
+    size_t mult = 0x9E3779B9UL; /* using mult because ULL not available in C89 */
     mult = (mult << 32) | 0x7F4A7C15UL;
     return (key * mult) >> (64 - ht->entry_count_msb_idx);
 #endif
