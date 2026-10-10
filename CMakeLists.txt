@@ -13,6 +13,11 @@ endif()
 add_library(${PROJECT_NAME} ${LIBRARY_TYPE} memcheck.h memcheck.c mem_ht.c mem_ht.h)
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
+# Add 32-bit macro.
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC MEMCHECK_32BIT)
+endif()
+
 if(NOT MSVC)
     # Add pthread
     find_package(Threads REQUIRED)
