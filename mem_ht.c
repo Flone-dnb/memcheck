@@ -318,22 +318,26 @@ mem_ht_iterator_destroy(mem_ht_iterator* it) {
 
 void*
 mem_ht_iterator_next(mem_ht_iterator* it) {
-    void* value;
-    mem_ht_entry* entry = it->ht->entries[it->entry_idx];
+    if (it->entry_idx >= it->ht->entry_count) {
+        return NULL;
+    } else {
+        void* value;
+        mem_ht_entry* entry = it->ht->entries[it->entry_idx];
 
-    value = entry->items[it->item_idx].value;
+        value = entry->items[it->item_idx].value;
 
-    if (it->item_idx + 1 < entry->items_count) {
-        it->item_idx += 1;
+        if (it->item_idx + 1 < entry->items_count) {
+            it->item_idx += 1;
+            return value;
+        }
+
+        it->entry_idx += 1;
+        it->item_idx = 0;
+
+        while (it->ht->entries[it->entry_idx] == NULL && it->entry_idx < it->ht->entry_count) {
+            it->entry_idx += 1;
+        }
+
         return value;
     }
-
-    it->entry_idx += 1;
-    it->item_idx = 0;
-
-    while (it->ht->entries[it->entry_idx] == NULL && it->entry_idx < it->ht->entry_count) {
-        it->entry_idx += 1;
-    }
-
-    return value;
 }
