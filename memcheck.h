@@ -7,8 +7,10 @@ void memcheck_deinit(void);
 
 #else
 
+#define _POSIX_C_SOURCE 200809L /* for ssize_t */
 #include <stddef.h>
 #include <wchar.h>
+#include <sys/types.h>
 #include <dirent.h>
 #include <stdio.h>
 
@@ -23,13 +25,10 @@ void __wrap_free(void* ptr);
 char* __wrap_strdup(const char* s);
 wchar_t* __wrap_wcsdup(const wchar_t* s);
 
-int __wrap_scandir(
-    const char* restrict dirp, struct dirent*** restrict namelist,
-    typeof(int(const struct dirent*))* filter,
-    typeof(int(const struct dirent**, const struct dirent**))* compar);
+int __wrap_scandir(const char* dirp, struct dirent*** namelist, void* filter, void* compar);
 
-ssize_t __wrap_getline(char** restrict lineptr, size_t* restrict n, FILE* restrict stream);
+ssize_t __wrap_getline(char** lineptr, size_t* n, FILE* stream);
 
-char* __wrap_realpath(const char* restrict name, char* restrict resolved);
+char* __wrap_realpath(const char* name, char* resolved);
 
 #endif

@@ -31,7 +31,7 @@ memcheck_deinit(void) {
 #include <string.h>
 #include <pthread.h>
 #include <execinfo.h>
-#include <num_hashtable.h>
+#include <mem_ht.h>
 
 extern void* __real_malloc(size_t size);
 extern void* __real_calloc(size_t nmemb, size_t size);
@@ -39,13 +39,10 @@ extern void* __real_realloc(void* ptr, size_t size);
 extern void __real_free(void* ptr);
 extern char* __real_strdup(const char* s);
 extern wchar_t* __real_wcsdup(const wchar_t* s);
-extern ssize_t
-__real_getline(char** restrict lineptr, size_t* restrict n, FILE* restrict stream);
-extern int __real_scandir(
-    const char* restrict dirp, struct dirent*** restrict namelist,
-    typeof(int(const struct dirent*))* filter,
-    typeof(int(const struct dirent**, const struct dirent**))* compar);
-extern char* __real_realpath(const char* restrict name, char* restrict resolved);
+extern ssize_t __real_getline(char** lineptr, size_t* n, FILE* stream);
+extern int
+__real_scandir(const char* dirp, struct dirent*** namelist, void* filter, void* compar);
+extern char* __real_realpath(const char* name, char* resolved);
 
 typedef struct te_memcheck_mem_info {
     char* caller1;
@@ -55,7 +52,7 @@ typedef struct te_memcheck_mem_info {
 } te_memcheck_mem_info;
 
 static pthread_mutex_t mutex;
-static struct te_num_hashtable* memhashmap = NULL;
+static struct mem_ht* memhashmap = NULL;
 static bool is_disabled = true;
 
 static uint64_t
@@ -94,7 +91,7 @@ memcheck_init(void) {
         abort();
     }
 
-    memhashmap = num_hashtable_create(200000, sizeof(te_memcheck_mem_info), deinit_mem_info);
+    memhashmap = mem_ht_create(200000, sizeof(te_memcheck_mem_info), deinit_mem_info);
 
     is_disabled = false;
 }
@@ -103,14 +100,14 @@ void
 memcheck_deinit(void) {
     is_disabled = true;
 
-    const bool found_leaks = num_hashtable_get_item_count(memhashmap) > 0;
+    const bool found_leaks = mem_ht_get_item_count(memhashmap) > 0;
     if (found_leaks) {
         printf("\nMEMORY LEAKS DETECTED !!!\n\n");
 
-        te_num_hashtable_iterator* it = num_hashtable_iterator_create(memhashmap);
+        mem_ht_iterator* it = mem_ht_iterator_create(memhashmap);
 
         size_t num = 1;
-        void* item = num_hashtable_iterator_next(it);
+        void* item = mem_ht_iterator_next(it);
         while (item != NULL) {
             const te_memcheck_mem_info* info = item;
             printf("%zu. leaked a pointer of size %zu bytes\n", num, info->size);
@@ -122,17 +119,17 @@ memcheck_deinit(void) {
             }
             num += 1;
 
-            item = num_hashtable_iterator_next(it);
+            item = mem_ht_iterator_next(it);
         }
 
-        num_hashtable_iterator_destroy(it);
+        mem_ht_iterator_destroy(it);
 
         printf("\nMEMORY LEAKS DETECTED !!!\n");
     } else {
         printf("no memory leaks detected\n");
     }
 
-    num_hashtable_destroy(memhashmap);
+    mem_ht_destroy(memhashmap);
     memhashmap = NULL;
 
     pthread_mutex_destroy(&mutex);
@@ -170,7 +167,7 @@ memcheck_register_ptr_locked(void* ptr, size_t size) {
     }
 
     is_disabled = true; // because hashmap can resize here
-    if (num_hashtable_insert(memhashmap, info.user_ptr_value, &info) == 0) {
+    if (mem_ht_insert(memhashmap, info.user_ptr_value, &info) == 0) {
         printf("memcheck ERROR: already have this pointer\n");
     }
     is_disabled = false;
@@ -181,7 +178,7 @@ memcheck_unregister_ptr_locked(void* ptr) {
     te_memcheck_mem_info test_info;
     test_info.user_ptr_value = (uintptr_t)ptr;
 
-    const te_memcheck_mem_info* info = num_hashtable_find(memhashmap, (uintptr_t)ptr);
+    const te_memcheck_mem_info* info = mem_ht_find(memhashmap, (uintptr_t)ptr);
     if (info == NULL) {
         printf(
             "memcheck ERROR: unknown pointer specified in free, either it was allocated using "
@@ -190,7 +187,7 @@ memcheck_unregister_ptr_locked(void* ptr) {
     }
 
     is_disabled = true; // because hashmap can resize here
-    num_hashtable_erase(memhashmap, (uintptr_t)ptr);
+    mem_ht_erase(memhashmap, (uintptr_t)ptr);
     is_disabled = false;
 }
 
@@ -251,8 +248,7 @@ __wrap_realloc(void* ptr, size_t size) {
         te_memcheck_mem_info test_info;
         test_info.user_ptr_value = (uintptr_t)ptr;
 
-        const te_memcheck_mem_info* found_info =
-            num_hashtable_find(memhashmap, (uintptr_t)ptr);
+        const te_memcheck_mem_info* found_info = mem_ht_find(memhashmap, (uintptr_t)ptr);
         if (found_info == NULL) {
             printf("memcheck ERROR: unknown pointer specified in realloc\n");
         }
@@ -319,10 +315,7 @@ __wrap_wcsdup(const wchar_t* s) {
 }
 
 int
-__wrap_scandir(
-    const char* restrict dirp, struct dirent*** restrict namelist,
-    typeof(int(const struct dirent*))* filter,
-    typeof(int(const struct dirent**, const struct dirent**))* compar) {
+__wrap_scandir(const char* dirp, struct dirent*** namelist, void* filter, void* compar) {
     int count = __real_scandir(dirp, namelist, filter, compar);
     if (count <= 0) {
         return count;
@@ -342,7 +335,7 @@ __wrap_scandir(
 }
 
 ssize_t
-__wrap_getline(char** restrict lineptr, size_t* restrict n, FILE* restrict stream) {
+__wrap_getline(char** lineptr, size_t* n, FILE* stream) {
     char* line = *lineptr;
     ssize_t chars_read = __real_getline(lineptr, n, stream);
 
@@ -362,7 +355,7 @@ __wrap_getline(char** restrict lineptr, size_t* restrict n, FILE* restrict strea
 }
 
 char*
-__wrap_realpath(const char* restrict name, char* restrict resolved) {
+__wrap_realpath(const char* name, char* resolved) {
     char* out = __real_realpath(name, resolved);
 
     if (resolved == NULL && out != NULL) {

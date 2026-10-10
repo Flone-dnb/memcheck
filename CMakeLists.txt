@@ -10,7 +10,7 @@ if(MSVC)
     set(LIBRARY_TYPE STATIC)
 endif()
 
-add_library(${PROJECT_NAME} ${LIBRARY_TYPE} memcheck.h memcheck.c num_hashtable.c num_hashtable.h)
+add_library(${PROJECT_NAME} ${LIBRARY_TYPE} memcheck.h memcheck.c mem_ht.c mem_ht.h)
 target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 if(NOT MSVC)
