@@ -41,9 +41,9 @@ round_to_power_of_2(size_t x) {
     x |= x >> 8;
     x |= x >> 16;
 
-    if (sizeof(size_t) == 8) {
+#if !defined(MEMCHECK_32BIT)
         x |= x >> 32;
-    }
+#endif
 
     return x + 1;
 }
