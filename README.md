@@ -31,6 +31,6 @@ Checks all malloc, free and similar memory operations (including linked librarie
 
 # Prerequisites
 
-- Compiler that supports C99
+- Compiler that supports C89/C90
 - [CMake](https://cmake.org/download/)
 
