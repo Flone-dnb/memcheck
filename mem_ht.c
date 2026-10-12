@@ -42,7 +42,7 @@ round_to_power_of_2(size_t x) {
     x |= x >> 16;
 
 #if !defined(MEMCHECK_32BIT)
-        x |= x >> 32;
+    x |= x >> 32;
 #endif
 
     return x + 1;
@@ -334,7 +334,7 @@ mem_ht_iterator_next(mem_ht_iterator* it) {
         it->entry_idx += 1;
         it->item_idx = 0;
 
-        while (it->ht->entries[it->entry_idx] == NULL && it->entry_idx < it->ht->entry_count) {
+        while (it->entry_idx < it->ht->entry_count && it->ht->entries[it->entry_idx] == NULL) {
             it->entry_idx += 1;
         }
 
